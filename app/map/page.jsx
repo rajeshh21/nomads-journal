@@ -1,18 +1,20 @@
 'use client'
 import { useAuth } from '@/context/AuthContext'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
-import { db } from '@/lib/firebase'
-import { collection, onSnapshot } from 'firebase/firestore'
+import { useEffect } from 'react'
 import dynamic from 'next/dynamic'
 
 const MapComponent = dynamic(
   () => import('@/components/Map'),
-  { 
+  {
     ssr: false,
     loading: () => (
-      <div className="h-full w-full flex items-center justify-center bg-gray-100">
-        <p className="text-gray-500 text-lg">🗺️ Loading Map...</p>
+      <div
+        className="h-full w-full flex flex-col items-center justify-center gap-3"
+        style={{ background: 'var(--surface)' }}
+      >
+        <div className="text-4xl">🗺️</div>
+        <p style={{ color: 'var(--text-secondary)' }}>Loading Map...</p>
       </div>
     )
   }
@@ -29,46 +31,88 @@ export default function MapPage() {
   }, [user, loading])
 
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center">
-      <p className="text-xl">Loading...</p>
+    <div
+      className="min-h-screen flex items-center justify-center"
+      style={{ background: 'var(--background)' }}
+    >
+      <div className="text-center">
+        <div className="text-4xl mb-4">🗺️</div>
+        <p style={{ color: 'var(--text-secondary)' }}>Loading...</p>
+      </div>
     </div>
   )
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      {/* Navbar */}
-      <nav className="bg-white shadow-md px-6 py-4 flex justify-between items-center">
+    <div
+      className="flex flex-col"
+      style={{ height: '100vh', background: 'var(--background)' }}
+    >
+
+      {/* ── Navbar ── */}
+      <nav
+        className="px-6 py-4 flex justify-between items-center flex-shrink-0"
+        style={{
+          background: 'var(--surface)',
+          borderBottom: '1px solid var(--border)',
+          boxShadow: 'var(--shadow-sm)',
+        }}
+      >
         <h1
           onClick={() => router.push('/dashboard')}
-          className="text-2xl font-bold text-orange-500 cursor-pointer"
+          className="text-xl font-bold cursor-pointer tracking-tight"
+          style={{ color: 'var(--text-primary)' }}
         >
           🌍 Nomads Journal
         </h1>
         <button
           onClick={() => router.push('/dashboard')}
-          className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg"
+          style={{
+            background: 'var(--surface-2)',
+            border: '1px solid var(--border)',
+            color: 'var(--text-secondary)',
+            padding: '0.4rem 1rem',
+            borderRadius: '8px',
+            fontSize: '0.85rem',
+            cursor: 'pointer',
+          }}
         >
           ← Back
         </button>
       </nav>
 
-      {/* Map Title */}
-      <div className="bg-white px-6 py-3 border-b flex items-center justify-between">
-        <h2 className="text-lg font-bold text-gray-800">
+      {/* ── Map Title Bar ── */}
+      <div
+        className="px-6 py-3 flex items-center justify-between flex-shrink-0"
+        style={{
+          background: 'var(--surface)',
+          borderBottom: '1px solid var(--border)',
+        }}
+      >
+        <h2 className="text-base font-bold" style={{ color: 'var(--text-primary)' }}>
           🗺️ Travelers Around The World
         </h2>
         <button
           onClick={() => router.push('/profile')}
-          className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm"
+          style={{
+            background: 'var(--accent)',
+            color: '#fff',
+            border: 'none',
+            padding: '0.4rem 1rem',
+            borderRadius: '8px',
+            fontSize: '0.85rem',
+            fontWeight: 600,
+            cursor: 'pointer',
+          }}
         >
           📍 Update My Location
         </button>
       </div>
 
-      {/* Map Container */}
-      <div style={{ height: 'calc(100vh - 130px)' }}>
+      {/* ── Map fills remaining height exactly ── */}
+      <div className="flex-1 relative" style={{ minHeight: 0 }}>
         <MapComponent />
       </div>
+
     </div>
   )
 }

@@ -12,8 +12,6 @@ import {
   serverTimestamp,
   doc,
   setDoc,
-  getDoc,
-  getDocs,
 } from 'firebase/firestore'
 import toast from 'react-hot-toast'
 
@@ -25,35 +23,28 @@ export default function ChatPage() {
   const [messages, setMessages] = useState([])
   const [newMessage, setNewMessage] = useState('')
   const [sending, setSending] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
   const messagesEndRef = useRef(null)
 
   useEffect(() => {
-    if (!loading && !user) {
-      router.push('/login')
-    }
+    if (!loading && !user) router.push('/login')
   }, [user, loading])
 
   // Fetch all travelers
   useEffect(() => {
     if (!user) return
-    const unsubscribe = onSnapshot(
-      collection(db, 'users'),
-      (snapshot) => {
-        const data = snapshot.docs
-          .map(doc => ({ id: doc.id, ...doc.data() }))
-          .filter(u => u.id !== user.uid)
-        setTravelers(data)
-      }
-    )
+    const unsubscribe = onSnapshot(collection(db, 'users'), (snapshot) => {
+      const data = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter(u => u.id !== user.uid)
+      setTravelers(data)
+    })
     return unsubscribe
   }, [user])
 
-  // Get chat ID
-  const getChatId = (uid1, uid2) => {
-    return [uid1, uid2].sort().join('_')
-  }
+  const getChatId = (uid1, uid2) => [uid1, uid2].sort().join('_')
 
-  // Load messages when user selected
+  // Load messages
   useEffect(() => {
     if (!selectedUser || !user) return
     const chatId = getChatId(user.uid, selectedUser.id)
@@ -62,10 +53,7 @@ export default function ChatPage() {
       orderBy('createdAt', 'asc')
     )
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const msgs = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }))
+      const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
       setMessages(msgs)
       scrollToBottom()
     })
@@ -84,22 +72,17 @@ export default function ChatPage() {
     setSending(true)
     try {
       const chatId = getChatId(user.uid, selectedUser.id)
-      
-      // Save message
       await addDoc(collection(db, 'chats', chatId, 'messages'), {
         text: newMessage,
         senderId: user.uid,
         senderName: user.displayName,
         createdAt: serverTimestamp(),
       })
-
-      // Update chat metadata
       await setDoc(doc(db, 'chats', chatId), {
         participants: [user.uid, selectedUser.id],
         lastMessage: newMessage,
         lastMessageTime: serverTimestamp(),
       })
-
       setNewMessage('')
       scrollToBottom()
     } catch (error) {
@@ -109,152 +92,421 @@ export default function ChatPage() {
     }
   }
 
+  const filteredTravelers = travelers.filter(t =>
+    t.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    t.currentLocation?.toLowerCase().includes(searchQuery.toLowerCase())
+  )
+
+  const formatTime = (timestamp) => {
+    return timestamp?.toDate?.()?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) || ''
+  }
+
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center">
-      <p className="text-xl">Loading...</p>
+    <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--background)' }}>
+      <div className="text-center">
+        <div className="text-4xl mb-4">💬</div>
+        <p style={{ color: 'var(--text-secondary)' }}>Loading...</p>
+      </div>
     </div>
   )
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      {/* Navbar */}
-      <nav className="bg-white shadow-md px-6 py-4 flex justify-between items-center">
+    <div className="flex flex-col" style={{ height: '100vh', background: 'var(--background)' }}>
+
+      {/* ── Navbar ── */}
+      <nav
+        className="px-6 py-4 flex justify-between items-center flex-shrink-0"
+        style={{
+          background: 'var(--surface)',
+          borderBottom: '1px solid var(--border)',
+          boxShadow: 'var(--shadow-sm)',
+          zIndex: 50,
+        }}
+      >
         <h1
           onClick={() => router.push('/dashboard')}
-          className="text-2xl font-bold text-orange-500 cursor-pointer"
+          className="text-xl font-bold cursor-pointer tracking-tight"
+          style={{ color: 'var(--text-primary)' }}
         >
           🌍 Nomads Journal
         </h1>
         <button
           onClick={() => router.push('/dashboard')}
-          className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg"
+          style={{
+            background: 'var(--surface-2)',
+            border: '1px solid var(--border)',
+            color: 'var(--text-secondary)',
+            padding: '0.4rem 1rem',
+            borderRadius: '8px',
+            fontSize: '0.85rem',
+            cursor: 'pointer',
+          }}
         >
           ← Back
         </button>
       </nav>
 
-      {/* Chat Layout */}
-      <div className="max-w-6xl mx-auto p-4">
-        <div className="bg-white rounded-2xl shadow overflow-hidden flex" style={{ height: 'calc(100vh - 140px)' }}>
-          
-          {/* Left Sidebar - Travelers List */}
-          <div className="w-80 border-r flex flex-col">
-            <div className="p-4 border-b bg-orange-50">
-              <h2 className="font-bold text-gray-800">💬 Messages</h2>
-              <p className="text-sm text-gray-500">Chat with travelers</p>
-            </div>
+      {/* ── Chat Layout ── */}
+      <div className="flex flex-1 overflow-hidden">
 
-            <div className="overflow-y-auto flex-1">
-              {travelers.length === 0 ? (
-                <div className="p-4 text-center text-gray-500">
-                  <p className="text-4xl mb-2">👥</p>
-                  <p>No travelers yet!</p>
-                  <p className="text-sm">Register more users to chat</p>
-                </div>
-              ) : (
-                travelers.map(traveler => (
-                  <div
-                    key={traveler.id}
-                    onClick={() => setSelectedUser(traveler)}
-                    className={`p-4 cursor-pointer hover:bg-orange-50 border-b transition ${
-                      selectedUser?.id === traveler.id ? 'bg-orange-50 border-l-4 border-l-orange-500' : ''
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
-                        <span className="text-xl">👤</span>
-                      </div>
-                      <div>
-                        <p className="font-semibold text-gray-800">{traveler.name}</p>
-                        <p className="text-xs text-gray-500">{traveler.currentLocation || 'Unknown location'}</p>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
+        {/* ══════════════════════
+            LEFT SIDEBAR
+        ══════════════════════ */}
+        <div
+          className="flex flex-col flex-shrink-0"
+          style={{
+            width: '300px',
+            background: 'var(--surface)',
+            borderRight: '1px solid var(--border)',
+          }}
+        >
+          {/* Sidebar Header */}
+          <div
+            className="p-4 flex-shrink-0"
+            style={{ borderBottom: '1px solid var(--border)' }}
+          >
+            <h2 className="font-bold text-base mb-3" style={{ color: 'var(--text-primary)' }}>
+              💬 Messages
+            </h2>
+            {/* Search travelers */}
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="🔍 Search travelers..."
+              style={{
+                background: 'var(--surface-2)',
+                border: '1px solid var(--border)',
+                color: 'var(--text-primary)',
+                borderRadius: '10px',
+                padding: '0.5rem 0.85rem',
+                width: '100%',
+                outline: 'none',
+                fontSize: '0.85rem',
+              }}
+              onFocus={e => {
+                e.target.style.borderColor = 'var(--accent)'
+                e.target.style.boxShadow = '0 0 0 2px var(--accent-glow)'
+              }}
+              onBlur={e => {
+                e.target.style.borderColor = 'var(--border)'
+                e.target.style.boxShadow = 'none'
+              }}
+            />
           </div>
 
-          {/* Right Side - Chat Area */}
-          <div className="flex-1 flex flex-col">
-            {selectedUser ? (
-              <>
-                {/* Chat Header */}
-                <div className="p-4 border-b bg-orange-50 flex items-center gap-3">
-                  <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
-                    <span className="text-xl">👤</span>
+          {/* Travelers List */}
+          <div className="overflow-y-auto flex-1">
+            {filteredTravelers.length === 0 ? (
+              <div className="p-6 text-center">
+                <p className="text-3xl mb-2">👥</p>
+                <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No travelers found</p>
+              </div>
+            ) : (
+              filteredTravelers.map(traveler => (
+                <div
+                  key={traveler.id}
+                  onClick={() => { setSelectedUser(traveler); setMessages([]) }}
+                  className="cursor-pointer flex items-center gap-3 px-4 py-3"
+                  style={{
+                    borderBottom: '1px solid var(--border-subtle)',
+                    background: selectedUser?.id === traveler.id
+                      ? 'var(--surface-2)'
+                      : 'transparent',
+                    borderLeft: selectedUser?.id === traveler.id
+                      ? '3px solid var(--accent)'
+                      : '3px solid transparent',
+                    transition: 'all 0.15s ease',
+                  }}
+                  onMouseEnter={e => {
+                    if (selectedUser?.id !== traveler.id)
+                      e.currentTarget.style.background = 'var(--surface-2)'
+                  }}
+                  onMouseLeave={e => {
+                    if (selectedUser?.id !== traveler.id)
+                      e.currentTarget.style.background = 'transparent'
+                  }}
+                >
+                  {/* Avatar */}
+                  <div
+                    className="flex-shrink-0 w-11 h-11 rounded-full flex items-center justify-center text-lg"
+                    style={{
+                      background: 'linear-gradient(135deg, #1a2a4a, #0d2b2b)',
+                      border: '2px solid var(--border)',
+                    }}
+                  >
+                    👤
                   </div>
-                  <div>
-                    <p className="font-bold text-gray-800">{selectedUser.name}</p>
-                    <p className="text-xs text-green-500">● Online</p>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-sm truncate" style={{ color: 'var(--text-primary)' }}>
+                      {traveler.name}
+                    </p>
+                    <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>
+                      {traveler.currentLocation || '🌍 Somewhere on Earth'}
+                    </p>
                   </div>
+                  {/* Online dot */}
+                  <div
+                    className="w-2 h-2 rounded-full flex-shrink-0"
+                    style={{ background: 'var(--success)' }}
+                  />
                 </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* ══════════════════════
+            RIGHT CHAT AREA
+        ══════════════════════ */}
+        <div className="flex-1 flex flex-col overflow-hidden" style={{ position: 'relative' }}>
+
+          {selectedUser ? (
+            <>
+              {/* ── Chat Header ── */}
+              <div
+                className="flex items-center gap-3 px-5 py-3 flex-shrink-0"
+                style={{
+                  background: 'var(--surface)',
+                  borderBottom: '1px solid var(--border)',
+                  boxShadow: 'var(--shadow-sm)',
+                  zIndex: 10,
+                }}
+              >
+                <div
+                  className="w-10 h-10 rounded-full flex items-center justify-center text-lg flex-shrink-0"
+                  style={{
+                    background: 'linear-gradient(135deg, #1a2a4a, #0d2b2b)',
+                    border: '2px solid var(--border)',
+                  }}
+                >
+                  👤
+                </div>
+                <div className="flex-1">
+                  <p className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>
+                    {selectedUser.name}
+                  </p>
+                  <p className="text-xs" style={{ color: 'var(--success)' }}>
+                    ● Online
+                  </p>
+                </div>
+                {selectedUser.currentLocation && (
+                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                    📍 {selectedUser.currentLocation}
+                  </span>
+                )}
+              </div>
+
+              {/* ── Messages Area with background ── */}
+              <div
+                className="flex-1 overflow-y-auto px-5 py-4 space-y-2"
+                style={{
+                  backgroundImage: `url('https://images.unsplash.com/photo-1519681393784-d120267933ba?w=1920&q=60')`,
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
+                  backgroundAttachment: 'local',
+                  position: 'relative',
+                }}
+              >
+                {/* Dark overlay on chat background */}
+                <div
+                  style={{
+                    position: 'fixed',
+                    inset: 0,
+                    background: 'rgba(13, 17, 23, 0.82)',
+                    zIndex: 0,
+                    pointerEvents: 'none',
+                  }}
+                />
 
                 {/* Messages */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                <div style={{ position: 'relative', zIndex: 1 }}>
                   {messages.length === 0 ? (
-                    <div className="text-center text-gray-500 mt-10">
-                      <p className="text-4xl mb-2">👋</p>
-                      <p>Say hello to {selectedUser.name}!</p>
+                    <div className="flex flex-col items-center justify-center py-16 text-center">
+                      <div
+                        className="w-16 h-16 rounded-full flex items-center justify-center text-3xl mb-4"
+                        style={{
+                          background: 'rgba(22,27,34,0.9)',
+                          border: '1px solid var(--border)',
+                        }}
+                      >
+                        👋
+                      </div>
+                      <p className="font-bold mb-1" style={{ color: 'var(--text-primary)' }}>
+                        Say hello to {selectedUser.name}!
+                      </p>
+                      <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                        Start your travel conversation
+                      </p>
                     </div>
                   ) : (
-                    messages.map(msg => (
-                      <div
-                        key={msg.id}
-                        className={`flex ${msg.senderId === user.uid ? 'justify-end' : 'justify-start'}`}
-                      >
+                    messages.map((msg, idx) => {
+                      const isMine = msg.senderId === user.uid
+                      const prevMsg = messages[idx - 1]
+                      const showName = !isMine && prevMsg?.senderId !== msg.senderId
+
+                      return (
                         <div
-                          className={`max-w-xs px-4 py-2 rounded-2xl ${
-                            msg.senderId === user.uid
-                              ? 'bg-orange-500 text-white rounded-br-none'
-                              : 'bg-gray-200 text-gray-800 rounded-bl-none'
-                          }`}
+                          key={msg.id}
+                          className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}
+                          style={{ marginBottom: '4px' }}
                         >
-                          <p>{msg.text}</p>
-                          <p className={`text-xs mt-1 ${
-                            msg.senderId === user.uid ? 'text-orange-200' : 'text-gray-500'
-                          }`}>
-                            {msg.createdAt?.toDate?.()?.toLocaleTimeString([], {
-                              hour: '2-digit',
-                              minute: '2-digit'
-                            })}
-                          </p>
+                          {/* Other user avatar */}
+                          {!isMine && (
+                            <div
+                              className="w-7 h-7 rounded-full flex items-center justify-center text-xs flex-shrink-0 mr-2 self-end"
+                              style={{
+                                background: 'var(--surface-2)',
+                                border: '1px solid var(--border)',
+                              }}
+                            >
+                              👤
+                            </div>
+                          )}
+
+                          {/* Bubble */}
+                          <div
+                            style={{
+                              maxWidth: '65%',
+                              padding: '8px 14px',
+                              borderRadius: isMine ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+                              background: isMine
+                                ? 'linear-gradient(135deg, #2f81f7, #1a6fd4)'
+                                : 'rgba(33, 38, 45, 0.95)',
+                              border: isMine
+                                ? 'none'
+                                : '1px solid rgba(48,54,61,0.8)',
+                              boxShadow: isMine
+                                ? '0 2px 12px rgba(47,129,247,0.3)'
+                                : '0 2px 8px rgba(0,0,0,0.3)',
+                              backdropFilter: !isMine ? 'blur(8px)' : 'none',
+                            }}
+                          >
+                            <p
+                              style={{
+                                color: isMine ? '#fff' : 'var(--text-primary)',
+                                fontSize: '0.9rem',
+                                lineHeight: '1.5',
+                                wordBreak: 'break-word',
+                              }}
+                            >
+                              {msg.text}
+                            </p>
+                            <p
+                              style={{
+                                fontSize: '0.68rem',
+                                marginTop: '4px',
+                                textAlign: 'right',
+                                color: isMine ? 'rgba(255,255,255,0.6)' : 'var(--text-muted)',
+                              }}
+                            >
+                              {formatTime(msg.createdAt)}
+                              {isMine && ' ✓✓'}
+                            </p>
+                          </div>
                         </div>
-                      </div>
-                    ))
+                      )
+                    })
                   )}
                   <div ref={messagesEndRef} />
                 </div>
-
-                {/* Message Input */}
-                <form onSubmit={sendMessage} className="p-4 border-t flex gap-2">
-                  <input
-                    type="text"
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    placeholder="Type a message..."
-                    className="flex-1 border-2 border-gray-300 rounded-xl px-4 py-2 text-gray-800 focus:outline-none focus:border-orange-400"
-                  />
-                  <button
-                    type="submit"
-                    disabled={sending}
-                    className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-2 rounded-xl font-bold transition"
-                  >
-                    {sending ? '...' : '➤'}
-                  </button>
-                </form>
-              </>
-            ) : (
-              // No chat selected
-              <div className="flex-1 flex items-center justify-center">
-                <div className="text-center text-gray-500">
-                  <p className="text-6xl mb-4">💬</p>
-                  <h3 className="text-xl font-bold text-gray-700">Start Chatting!</h3>
-                  <p className="mt-2">Select a traveler from the left to start chatting</p>
-                </div>
               </div>
-            )}
-          </div>
+
+              {/* ── Message Input ── */}
+              <form
+                onSubmit={sendMessage}
+                className="flex items-center gap-3 px-4 py-3 flex-shrink-0"
+                style={{
+                  background: 'var(--surface)',
+                  borderTop: '1px solid var(--border)',
+                }}
+              >
+                <input
+                  type="text"
+                  value={newMessage}
+                  onChange={e => setNewMessage(e.target.value)}
+                  placeholder="Type a message..."
+                  style={{
+                    flex: 1,
+                    background: 'var(--surface-2)',
+                    border: '1px solid var(--border)',
+                    color: 'var(--text-primary)',
+                    borderRadius: '999px',
+                    padding: '0.65rem 1.2rem',
+                    outline: 'none',
+                    fontSize: '0.9rem',
+                    transition: 'border-color 0.2s',
+                  }}
+                  onFocus={e => {
+                    e.target.style.borderColor = 'var(--accent)'
+                    e.target.style.boxShadow = '0 0 0 2px var(--accent-glow)'
+                  }}
+                  onBlur={e => {
+                    e.target.style.borderColor = 'var(--border)'
+                    e.target.style.boxShadow = 'none'
+                  }}
+                />
+                <button
+                  type="submit"
+                  disabled={sending || !newMessage.trim()}
+                  style={{
+                    width: '44px',
+                    height: '44px',
+                    borderRadius: '50%',
+                    background: sending || !newMessage.trim() ? 'var(--surface-3)' : 'var(--accent)',
+                    border: 'none',
+                    color: '#fff',
+                    fontSize: '1.1rem',
+                    cursor: sending || !newMessage.trim() ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                    transition: 'all 0.2s ease',
+                    boxShadow: !sending && newMessage.trim() ? '0 2px 12px rgba(47,129,247,0.4)' : 'none',
+                  }}
+                >
+                  ➤
+                </button>
+              </form>
+            </>
+          ) : (
+            /* ── No chat selected ── */
+            <div
+              className="flex-1 flex flex-col items-center justify-center text-center p-8"
+              style={{
+                backgroundImage: `url('https://images.unsplash.com/photo-1519681393784-d120267933ba?w=1920&q=60')`,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+                position: 'relative',
+              }}
+            >
+              <div
+                style={{
+                  position: 'absolute', inset: 0,
+                  background: 'rgba(13,17,23,0.88)',
+                }}
+              />
+              <div style={{ position: 'relative', zIndex: 1 }}>
+                <div
+                  className="w-20 h-20 rounded-full flex items-center justify-center text-4xl mx-auto mb-5"
+                  style={{
+                    background: 'rgba(22,27,34,0.9)',
+                    border: '1px solid var(--border)',
+                    boxShadow: 'var(--shadow-glow)',
+                  }}
+                >
+                  💬
+                </div>
+                <h3 className="text-2xl font-bold mb-2" style={{ color: 'var(--text-primary)' }}>
+                  Start Chatting!
+                </h3>
+                <p style={{ color: 'var(--text-secondary)', maxWidth: '280px' }}>
+                  Select a traveler from the left sidebar to start your conversation
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

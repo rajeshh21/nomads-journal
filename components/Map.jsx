@@ -3,6 +3,9 @@ import { useEffect, useState } from 'react'
 import { db } from '@/lib/firebase'
 import { collection, onSnapshot } from 'firebase/firestore'
 
+// ── CRITICAL FIX: Import Leaflet CSS here ──
+import 'leaflet/dist/leaflet.css'
+
 export default function Map() {
   const [travelers, setTravelers] = useState([])
   const [isMounted, setIsMounted] = useState(false)
@@ -10,11 +13,10 @@ export default function Map() {
 
   useEffect(() => {
     setIsMounted(true)
-    // Dynamically import leaflet (fixes Next.js SSR issue)
     const loadMap = async () => {
       const L = await import('leaflet')
       const { MapContainer, TileLayer, Marker, Popup } = await import('react-leaflet')
-      
+
       // Fix leaflet marker icon issue
       delete L.default.Icon.Default.prototype._getIconUrl
       L.default.Icon.Default.mergeOptions({
@@ -43,8 +45,12 @@ export default function Map() {
   }, [])
 
   if (!isMounted || !MapComponents) return (
-    <div className="h-full w-full flex items-center justify-center bg-gray-100">
-      <p className="text-gray-500 text-lg">🗺️ Loading Map...</p>
+    <div
+      className="h-full w-full flex flex-col items-center justify-center gap-3"
+      style={{ background: 'var(--surface)' }}
+    >
+      <div className="text-4xl">🗺️</div>
+      <p style={{ color: 'var(--text-secondary)' }}>Loading Map...</p>
     </div>
   )
 
@@ -70,21 +76,27 @@ export default function Map() {
           ]}
         >
           <Popup>
-            <div className="p-2 min-w-40">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
-                  <span className="text-xl">👤</span>
+            <div style={{ padding: '8px', minWidth: '160px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                <div style={{
+                  width: '36px', height: '36px',
+                  background: '#1a2a4a',
+                  borderRadius: '50%',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '18px'
+                }}>
+                  👤
                 </div>
                 <div>
-                  <h3 className="font-bold text-gray-800">{traveler.name}</h3>
-                  <p className="text-xs text-gray-500">{traveler.travelStyle}</p>
+                  <div style={{ fontWeight: 700, fontSize: '14px', color: '#1a1a2e' }}>{traveler.name}</div>
+                  <div style={{ fontSize: '11px', color: '#666' }}>{traveler.travelStyle}</div>
                 </div>
               </div>
               {traveler.bio && (
-                <p className="text-sm text-gray-600 mb-2">{traveler.bio}</p>
+                <p style={{ fontSize: '12px', color: '#444', marginBottom: '6px' }}>{traveler.bio}</p>
               )}
               {traveler.currentLocation && (
-                <p className="text-xs text-orange-500">
+                <p style={{ fontSize: '11px', color: '#2f81f7', fontWeight: 600 }}>
                   📍 {traveler.currentLocation}
                 </p>
               )}
