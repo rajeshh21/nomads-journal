@@ -427,16 +427,18 @@ export default function ChatPage() {
                   onChange={e => setNewMessage(e.target.value)}
                   placeholder="Type a message..."
                   style={{
-                    flex: 1,
-                    background: 'var(--surface-2)',
-                    border: '1px solid var(--border)',
-                    color: 'var(--text-primary)',
-                    borderRadius: '999px',
-                    padding: '0.65rem 1.2rem',
-                    outline: 'none',
-                    fontSize: '0.9rem',
-                    transition: 'border-color 0.2s',
-                  }}
+                  flex: 1,
+                   border: '1px solid var(--border)',
+                  color: '#dcc8c8',
+                  WebkitTextFillColor: '#ffffff',
+                  caretColor: '#ffffff',
+                  background: '#040e1b',
+                  borderRadius: '999px',
+                  padding: '0.65rem 1.2rem',
+                  outline: 'none',
+                  fontSize: '0.9rem',
+                  transition: 'border-color 0.2s',
+            }}
                   onFocus={e => {
                     e.target.style.borderColor = 'var(--accent)'
                     e.target.style.boxShadow = '0 0 0 2px var(--accent-glow)'
