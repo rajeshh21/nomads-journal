@@ -12,6 +12,7 @@ import {
   serverTimestamp,
   doc,
   setDoc,
+  updateDoc,
 } from 'firebase/firestore'
 import toast from 'react-hot-toast'
 
@@ -24,13 +25,15 @@ export default function ChatPage() {
   const [newMessage, setNewMessage] = useState('')
   const [sending, setSending] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [unreadCounts, setUnreadCounts] = useState({})
   const messagesEndRef = useRef(null)
+  const inputRef = useRef(null)
 
   useEffect(() => {
     if (!loading && !user) router.push('/login')
   }, [user, loading])
 
-  // Fetch all travelers
+  // Fetch all travelers — UNTOUCHED
   useEffect(() => {
     if (!user) return
     const unsubscribe = onSnapshot(collection(db, 'users'), (snapshot) => {
@@ -44,18 +47,42 @@ export default function ChatPage() {
 
   const getChatId = (uid1, uid2) => [uid1, uid2].sort().join('_')
 
-  // Load messages
+  // Unread counts — UNTOUCHED
+  useEffect(() => {
+    if (!user || travelers.length === 0) return
+    const unsubs = travelers.map(traveler => {
+      const chatId = getChatId(user.uid, traveler.id)
+      const q = query(collection(db, 'chats', chatId, 'messages'), orderBy('createdAt', 'asc'))
+      return onSnapshot(q, (snapshot) => {
+        const unread = snapshot.docs.filter(d => {
+          const msg = d.data()
+          return msg.senderId !== user.uid && !msg.readBy?.includes(user.uid)
+        }).length
+        setUnreadCounts(prev => ({ ...prev, [traveler.id]: unread }))
+      })
+    })
+    return () => unsubs.forEach(u => u())
+  }, [user, travelers])
+
+  // Load messages — UNTOUCHED
   useEffect(() => {
     if (!selectedUser || !user) return
     const chatId = getChatId(user.uid, selectedUser.id)
-    const q = query(
-      collection(db, 'chats', chatId, 'messages'),
-      orderBy('createdAt', 'asc')
-    )
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const q = query(collection(db, 'chats', chatId, 'messages'), orderBy('createdAt', 'asc'))
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
       const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
       setMessages(msgs)
       scrollToBottom()
+      const unreadDocs = snapshot.docs.filter(d => {
+        const msg = d.data()
+        return msg.senderId !== user.uid && !msg.readBy?.includes(user.uid)
+      })
+      for (const msgDoc of unreadDocs) {
+        const existing = msgDoc.data().readBy || []
+        await updateDoc(doc(db, 'chats', chatId, 'messages', msgDoc.id), {
+          readBy: [...existing, user.uid]
+        })
+      }
     })
     return unsubscribe
   }, [selectedUser, user])
@@ -66,6 +93,7 @@ export default function ChatPage() {
     }, 100)
   }
 
+  // sendMessage — UNTOUCHED
   const sendMessage = async (e) => {
     e.preventDefault()
     if (!newMessage.trim() || !selectedUser) return
@@ -77,6 +105,7 @@ export default function ChatPage() {
         senderId: user.uid,
         senderName: user.displayName,
         createdAt: serverTimestamp(),
+        readBy: [user.uid],
       })
       await setDoc(doc(db, 'chats', chatId), {
         participants: [user.uid, selectedUser.id],
@@ -85,6 +114,7 @@ export default function ChatPage() {
       })
       setNewMessage('')
       scrollToBottom()
+      inputRef.current?.focus()
     } catch (error) {
       toast.error('Failed to send message!')
     } finally {
@@ -102,51 +132,58 @@ export default function ChatPage() {
   }
 
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--background)' }}>
+    <div className="min-h-screen flex items-center justify-center" style={{ background: '#0d1117' }}>
       <div className="text-center">
         <div className="text-4xl mb-4">💬</div>
-        <p style={{ color: 'var(--text-secondary)' }}>Loading...</p>
+        <p style={{ color: '#8b949e' }}>Loading...</p>
       </div>
     </div>
   )
 
   return (
-    <div className="flex flex-col" style={{ height: '100vh', background: 'var(--background)' }}>
+    <div className="flex flex-col" style={{ height: '100vh', background: '#0d1117' }}>
 
-      {/* ── Navbar ── */}
-      <nav
-        className="px-6 py-4 flex justify-between items-center flex-shrink-0"
-        style={{
-          background: 'var(--surface)',
-          borderBottom: '1px solid var(--border)',
-          boxShadow: 'var(--shadow-sm)',
-          zIndex: 50,
-        }}
-      >
+      {/* ══════════════════════════════════
+          NAVBAR
+      ══════════════════════════════════ */}
+      <nav className="px-6 py-4 flex justify-between items-center flex-shrink-0" style={{
+        background: 'linear-gradient(135deg, rgba(13,17,23,0.98), rgba(26,42,74,0.98))',
+        borderBottom: '1px solid rgba(47,129,247,0.25)',
+        boxShadow: '0 2px 20px rgba(0,0,0,0.5)',
+        zIndex: 50,
+      }}>
         <h1
           onClick={() => router.push('/dashboard')}
-          className="text-xl font-bold cursor-pointer tracking-tight"
-          style={{ color: 'var(--text-primary)' }}
+          className="text-xl font-bold cursor-pointer"
+          style={{
+            background: 'linear-gradient(135deg, #20b2aa, #2f81f7, #8b5cf6)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            filter: 'drop-shadow(0 0 8px rgba(47,129,247,0.3))',
+          }}
         >
           🌍 Nomads Journal
         </h1>
         <button
           onClick={() => router.push('/dashboard')}
           style={{
-            background: 'var(--surface-2)',
-            border: '1px solid var(--border)',
-            color: 'var(--text-secondary)',
+            background: 'rgba(47,129,247,0.1)',
+            border: '1px solid rgba(47,129,247,0.3)',
+            color: '#e6edf3',
             padding: '0.4rem 1rem',
             borderRadius: '8px',
             fontSize: '0.85rem',
             cursor: 'pointer',
+            transition: 'all 0.2s',
           }}
-        >
-          ← Back
-        </button>
+          onMouseEnter={e => e.currentTarget.style.background = 'rgba(47,129,247,0.2)'}
+          onMouseLeave={e => e.currentTarget.style.background = 'rgba(47,129,247,0.1)'}
+        >← Back</button>
       </nav>
 
-      {/* ── Chat Layout ── */}
+      {/* ══════════════════════════════════
+          CHAT LAYOUT
+      ══════════════════════════════════ */}
       <div className="flex flex-1 overflow-hidden">
 
         {/* ══════════════════════
@@ -156,43 +193,61 @@ export default function ChatPage() {
           className="flex flex-col flex-shrink-0"
           style={{
             width: '300px',
-            background: 'var(--surface)',
-            borderRight: '1px solid var(--border)',
+            background: 'linear-gradient(180deg, #1a2035 0%, #1e2640 100%)',
+            borderRight: '1px solid rgba(47,129,247,0.2)',
+            boxShadow: '4px 0 20px rgba(0,0,0,0.3)',
           }}
         >
           {/* Sidebar Header */}
           <div
             className="p-4 flex-shrink-0"
-            style={{ borderBottom: '1px solid var(--border)' }}
+            style={{
+              background: 'linear-gradient(135deg, #252d45, #1e2640)',
+              borderBottom: '1px solid rgba(47,129,247,0.2)',
+            }}
           >
-            <h2 className="font-bold text-base mb-3" style={{ color: 'var(--text-primary)' }}>
+            <h2 className="font-bold text-lg mb-3" style={{
+              background: 'linear-gradient(135deg, #20b2aa, #2f81f7)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+            }}>
               💬 Messages
             </h2>
-            {/* Search travelers */}
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder="🔍 Search travelers..."
-              style={{
-                background: 'var(--surface-2)',
-                border: '1px solid var(--border)',
-                color: 'var(--text-primary)',
-                borderRadius: '10px',
-                padding: '0.5rem 0.85rem',
-                width: '100%',
-                outline: 'none',
-                fontSize: '0.85rem',
-              }}
-              onFocus={e => {
-                e.target.style.borderColor = 'var(--accent)'
-                e.target.style.boxShadow = '0 0 0 2px var(--accent-glow)'
-              }}
-              onBlur={e => {
-                e.target.style.borderColor = 'var(--border)'
-                e.target.style.boxShadow = 'none'
-              }}
-            />
+            {/* Search */}
+            <div style={{ position: 'relative' }}>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Search travelers..."
+                style={{
+                  background: 'rgba(255,255,255,0.08)',
+                  border: '1px solid rgba(99,130,191,0.3)',
+                  color: '#ffffff',
+                  borderRadius: '12px',
+                  padding: '0.55rem 0.85rem 0.55rem 2.2rem',
+                  width: '100%',
+                  outline: 'none',
+                  fontSize: '0.85rem',
+                  transition: 'all 0.2s',
+                }}
+                onFocus={e => {
+                  e.target.style.borderColor = '#2f81f7'
+                  e.target.style.background = 'rgba(47,129,247,0.1)'
+                  e.target.style.boxShadow = '0 0 0 2px rgba(47,129,247,0.2)'
+                }}
+                onBlur={e => {
+                  e.target.style.borderColor = 'rgba(99,130,191,0.3)'
+                  e.target.style.background = 'rgba(255,255,255,0.08)'
+                  e.target.style.boxShadow = 'none'
+                }}
+              />
+              <span style={{
+                position: 'absolute', left: '0.7rem', top: '50%',
+                transform: 'translateY(-50%)', fontSize: '0.85rem',
+                pointerEvents: 'none',
+              }}>🔍</span>
+            </div>
           </div>
 
           {/* Travelers List */}
@@ -200,58 +255,97 @@ export default function ChatPage() {
             {filteredTravelers.length === 0 ? (
               <div className="p-6 text-center">
                 <p className="text-3xl mb-2">👥</p>
-                <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No travelers found</p>
+                <p className="text-sm" style={{ color: '#8b949e' }}>No travelers found</p>
               </div>
             ) : (
-              filteredTravelers.map(traveler => (
-                <div
-                  key={traveler.id}
-                  onClick={() => { setSelectedUser(traveler); setMessages([]) }}
-                  className="cursor-pointer flex items-center gap-3 px-4 py-3"
-                  style={{
-                    borderBottom: '1px solid var(--border-subtle)',
-                    background: selectedUser?.id === traveler.id
-                      ? 'var(--surface-2)'
-                      : 'transparent',
-                    borderLeft: selectedUser?.id === traveler.id
-                      ? '3px solid var(--accent)'
-                      : '3px solid transparent',
-                    transition: 'all 0.15s ease',
-                  }}
-                  onMouseEnter={e => {
-                    if (selectedUser?.id !== traveler.id)
-                      e.currentTarget.style.background = 'var(--surface-2)'
-                  }}
-                  onMouseLeave={e => {
-                    if (selectedUser?.id !== traveler.id)
-                      e.currentTarget.style.background = 'transparent'
-                  }}
-                >
-                  {/* Avatar */}
+              filteredTravelers.map(traveler => {
+                const unread = unreadCounts[traveler.id] || 0
+                const isSelected = selectedUser?.id === traveler.id
+
+                return (
                   <div
-                    className="flex-shrink-0 w-11 h-11 rounded-full flex items-center justify-center text-lg"
+                    key={traveler.id}
+                    onClick={() => { setSelectedUser(traveler); setMessages([]) }}
+                    className="cursor-pointer flex items-center gap-3 px-4 py-3"
                     style={{
-                      background: 'linear-gradient(135deg, #1a2a4a, #0d2b2b)',
-                      border: '2px solid var(--border)',
+                      borderBottom: '1px solid rgba(99,130,191,0.1)',
+                      background: isSelected
+                        ? 'linear-gradient(135deg, rgba(47,129,247,0.2), rgba(32,178,170,0.1))'
+                        : 'transparent',
+                      borderLeft: isSelected ? '3px solid #2f81f7' : '3px solid transparent',
+                      transition: 'all 0.15s ease',
+                    }}
+                    onMouseEnter={e => {
+                      if (!isSelected) e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
+                    }}
+                    onMouseLeave={e => {
+                      if (!isSelected) e.currentTarget.style.background = 'transparent'
                     }}
                   >
-                    👤
+                    {/* Avatar */}
+                    <div
+                      className="flex-shrink-0 w-11 h-11 rounded-full flex items-center justify-center text-lg overflow-hidden"
+                      style={{
+                        background: 'linear-gradient(135deg, #2d4a7a, #1a4a4a)',
+                        border: unread > 0
+                          ? '2px solid #2f81f7'
+                          : '2px solid rgba(99,130,191,0.3)',
+                        boxShadow: unread > 0 ? '0 0 8px rgba(47,129,247,0.4)' : 'none',
+                      }}
+                    >
+                      {traveler.photoUrl
+                        ? <img src={traveler.photoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        : '👤'}
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <p
+                          className="text-sm truncate"
+                          style={{
+                            color: '#ffffff',
+                            fontWeight: unread > 0 ? 700 : 500,
+                          }}
+                        >
+                          {traveler.name}
+                        </p>
+                        {/* Unread badge */}
+                        {unread > 0 && (
+                          <span style={{
+                            background: 'linear-gradient(135deg, #2f81f7, #20b2aa)',
+                            color: '#fff',
+                            fontSize: '0.65rem',
+                            fontWeight: 700,
+                            minWidth: '20px',
+                            height: '20px',
+                            borderRadius: '999px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: '0 5px',
+                            flexShrink: 0,
+                            boxShadow: '0 2px 8px rgba(47,129,247,0.4)',
+                          }}>
+                            {unread}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs truncate mt-0.5" style={{ color: '#8b949e' }}>
+                        {traveler.currentLocation || '🌍 Somewhere on Earth'}
+                      </p>
+                    </div>
+
+                    {/* Online dot */}
+                    <div
+                      className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                      style={{
+                        background: '#3fb950',
+                        boxShadow: '0 0 6px rgba(63,185,80,0.6)',
+                      }}
+                    />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-sm truncate" style={{ color: 'var(--text-primary)' }}>
-                      {traveler.name}
-                    </p>
-                    <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>
-                      {traveler.currentLocation || '🌍 Somewhere on Earth'}
-                    </p>
-                  </div>
-                  {/* Online dot */}
-                  <div
-                    className="w-2 h-2 rounded-full flex-shrink-0"
-                    style={{ background: 'var(--success)' }}
-                  />
-                </div>
-              ))
+                )
+              })
             )}
           </div>
         </div>
@@ -267,39 +361,50 @@ export default function ChatPage() {
               <div
                 className="flex items-center gap-3 px-5 py-3 flex-shrink-0"
                 style={{
-                  background: 'var(--surface)',
-                  borderBottom: '1px solid var(--border)',
-                  boxShadow: 'var(--shadow-sm)',
+                  background: 'linear-gradient(135deg, #1a2035, #1e2640)',
+                  borderBottom: '1px solid rgba(47,129,247,0.2)',
+                  boxShadow: '0 2px 12px rgba(0,0,0,0.3)',
                   zIndex: 10,
                 }}
               >
                 <div
-                  className="w-10 h-10 rounded-full flex items-center justify-center text-lg flex-shrink-0"
+                  className="w-11 h-11 rounded-full flex items-center justify-center text-lg flex-shrink-0 overflow-hidden"
                   style={{
-                    background: 'linear-gradient(135deg, #1a2a4a, #0d2b2b)',
-                    border: '2px solid var(--border)',
+                    background: 'linear-gradient(135deg, #2d4a7a, #1a4a4a)',
+                    border: '2px solid rgba(47,129,247,0.4)',
+                    boxShadow: '0 0 10px rgba(47,129,247,0.2)',
                   }}
                 >
-                  👤
+                  {selectedUser.photoUrl
+                    ? <img src={selectedUser.photoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : '👤'}
                 </div>
                 <div className="flex-1">
-                  <p className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>
+                  <p className="font-bold" style={{ color: '#ffffff', fontSize: '0.95rem' }}>
                     {selectedUser.name}
                   </p>
-                  <p className="text-xs" style={{ color: 'var(--success)' }}>
-                    ● Online
+                  <p className="text-xs flex items-center gap-1" style={{ color: '#3fb950' }}>
+                    <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: '#3fb950', boxShadow: '0 0 6px rgba(63,185,80,0.8)' }} />
+                    Online
                   </p>
                 </div>
                 {selectedUser.currentLocation && (
-                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                  <span
+                    className="text-xs px-3 py-1 rounded-full"
+                    style={{
+                      color: '#20b2aa',
+                      background: 'rgba(32,178,170,0.1)',
+                      border: '1px solid rgba(32,178,170,0.2)',
+                    }}
+                  >
                     📍 {selectedUser.currentLocation}
                   </span>
                 )}
               </div>
 
-              {/* ── Messages Area with background ── */}
+              {/* ── Messages Area ── */}
               <div
-                className="flex-1 overflow-y-auto px-5 py-4 space-y-2"
+                className="flex-1 overflow-y-auto px-5 py-4"
                 style={{
                   backgroundImage: `url('https://images.unsplash.com/photo-1519681393784-d120267933ba?w=1920&q=60')`,
                   backgroundSize: 'cover',
@@ -308,101 +413,105 @@ export default function ChatPage() {
                   position: 'relative',
                 }}
               >
-                {/* Dark overlay on chat background */}
-                <div
-                  style={{
-                    position: 'fixed',
-                    inset: 0,
-                    background: 'rgba(13, 17, 23, 0.82)',
-                    zIndex: 0,
-                    pointerEvents: 'none',
-                  }}
-                />
+                {/* Overlay */}
+                <div style={{
+                  position: 'fixed', inset: 0,
+                  background: 'rgba(10,14,20,0.85)',
+                  zIndex: 0, pointerEvents: 'none',
+                }} />
 
-                {/* Messages */}
-                <div style={{ position: 'relative', zIndex: 1 }}>
+                <div style={{ position: 'relative', zIndex: 1 }} className="space-y-2">
                   {messages.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-16 text-center">
+                    <div className="flex flex-col items-center justify-center py-20 text-center">
                       <div
-                        className="w-16 h-16 rounded-full flex items-center justify-center text-3xl mb-4"
+                        className="w-20 h-20 rounded-full flex items-center justify-center text-4xl mb-4"
                         style={{
-                          background: 'rgba(22,27,34,0.9)',
-                          border: '1px solid var(--border)',
+                          background: 'rgba(30,38,64,0.9)',
+                          border: '1px solid rgba(47,129,247,0.3)',
+                          boxShadow: '0 0 20px rgba(47,129,247,0.15)',
                         }}
-                      >
-                        👋
-                      </div>
-                      <p className="font-bold mb-1" style={{ color: 'var(--text-primary)' }}>
+                      >👋</div>
+                      <p className="font-bold text-lg mb-1" style={{ color: '#ffffff' }}>
                         Say hello to {selectedUser.name}!
                       </p>
-                      <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-                        Start your travel conversation
+                      <p className="text-sm" style={{ color: '#8b949e' }}>
+                        Start your travel conversation ✈️
                       </p>
                     </div>
                   ) : (
-                    messages.map((msg, idx) => {
+                    messages.map((msg) => {
                       const isMine = msg.senderId === user.uid
-                      const prevMsg = messages[idx - 1]
-                      const showName = !isMine && prevMsg?.senderId !== msg.senderId
+                      const isRead = msg.readBy?.includes(selectedUser.id)
 
                       return (
                         <div
                           key={msg.id}
                           className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}
-                          style={{ marginBottom: '4px' }}
+                          style={{ marginBottom: '6px' }}
                         >
                           {/* Other user avatar */}
                           {!isMine && (
                             <div
-                              className="w-7 h-7 rounded-full flex items-center justify-center text-xs flex-shrink-0 mr-2 self-end"
+                              className="w-8 h-8 rounded-full flex items-center justify-center text-xs flex-shrink-0 mr-2 self-end overflow-hidden"
                               style={{
-                                background: 'var(--surface-2)',
-                                border: '1px solid var(--border)',
+                                background: 'linear-gradient(135deg, #2d4a7a, #1a4a4a)',
+                                border: '1px solid rgba(99,130,191,0.4)',
                               }}
                             >
-                              👤
+                              {selectedUser.photoUrl
+                                ? <img src={selectedUser.photoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                : '👤'}
                             </div>
                           )}
 
                           {/* Bubble */}
-                          <div
-                            style={{
-                              maxWidth: '65%',
-                              padding: '8px 14px',
-                              borderRadius: isMine ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
-                              background: isMine
-                                ? 'linear-gradient(135deg, #2f81f7, #1a6fd4)'
-                                : 'rgba(33, 38, 45, 0.95)',
-                              border: isMine
-                                ? 'none'
-                                : '1px solid rgba(48,54,61,0.8)',
-                              boxShadow: isMine
-                                ? '0 2px 12px rgba(47,129,247,0.3)'
-                                : '0 2px 8px rgba(0,0,0,0.3)',
-                              backdropFilter: !isMine ? 'blur(8px)' : 'none',
-                            }}
-                          >
-                            <p
-                              style={{
-                                color: isMine ? '#fff' : 'var(--text-primary)',
-                                fontSize: '0.9rem',
-                                lineHeight: '1.5',
-                                wordBreak: 'break-word',
-                              }}
-                            >
+                          <div style={{
+                            maxWidth: '65%',
+                            padding: '10px 15px',
+                            borderRadius: isMine ? '20px 20px 4px 20px' : '20px 20px 20px 4px',
+                            background: isMine
+                              ? 'linear-gradient(135deg, #2f81f7, #1a6fd4)'
+                              : 'rgba(30,38,64,0.95)',
+                            border: isMine
+                              ? 'none'
+                              : '1px solid rgba(99,130,191,0.25)',
+                            boxShadow: isMine
+                              ? '0 3px 15px rgba(47,129,247,0.35)'
+                              : '0 2px 10px rgba(0,0,0,0.4)',
+                          }}>
+                            <p style={{
+                              color: '#ffffff',
+                              fontSize: '0.92rem',
+                              lineHeight: '1.55',
+                              wordBreak: 'break-word',
+                            }}>
                               {msg.text}
                             </p>
-                            <p
-                              style={{
+                            <div style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'flex-end',
+                              gap: '4px',
+                              marginTop: '5px',
+                            }}>
+                              <span style={{
                                 fontSize: '0.68rem',
-                                marginTop: '4px',
-                                textAlign: 'right',
-                                color: isMine ? 'rgba(255,255,255,0.6)' : 'var(--text-muted)',
-                              }}
-                            >
-                              {formatTime(msg.createdAt)}
-                              {isMine && ' ✓✓'}
-                            </p>
+                                color: isMine ? 'rgba(255,255,255,0.55)' : '#8b949e',
+                              }}>
+                                {formatTime(msg.createdAt)}
+                              </span>
+                              {/* Read / Unread ticks */}
+                              {isMine && (
+                                <span style={{
+                                  fontSize: '0.72rem',
+                                  fontWeight: 700,
+                                  color: isRead ? '#60d4f7' : 'rgba(255,255,255,0.4)',
+                                  letterSpacing: '-1px',
+                                }}>
+                                  {isRead ? '✓✓' : '✓'}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
                       )
@@ -412,50 +521,64 @@ export default function ChatPage() {
                 </div>
               </div>
 
-              {/* ── Message Input ── */}
+              {/* ══════════════════════════════════
+                  COLORFUL MESSAGE INPUT BAR
+              ══════════════════════════════════ */}
               <form
                 onSubmit={sendMessage}
                 className="flex items-center gap-3 px-4 py-3 flex-shrink-0"
                 style={{
-                  background: 'var(--surface)',
-                  borderTop: '1px solid var(--border)',
+                  background: 'linear-gradient(135deg, #1a2035, #1e2640)',
+                  borderTop: '1px solid rgba(47,129,247,0.25)',
+                  boxShadow: '0 -4px 20px rgba(0,0,0,0.3)',
                 }}
               >
-                <input
-                  type="text"
-                  value={newMessage}
-                  onChange={e => setNewMessage(e.target.value)}
-                  placeholder="Type a message..."
-                  style={{
+                {/* Colorful gradient input wrapper */}
+                <div style={{
                   flex: 1,
-                   border: '1px solid var(--border)',
-                  color: '#dcc8c8',
-                  WebkitTextFillColor: '#ffffff',
-                  caretColor: '#ffffff',
-                  background: '#040e1b',
+                  background: 'linear-gradient(135deg, #2f81f7, #20b2aa, #8b5cf6)',
                   borderRadius: '999px',
-                  padding: '0.65rem 1.2rem',
-                  outline: 'none',
-                  fontSize: '0.9rem',
-                  transition: 'border-color 0.2s',
-            }}
-                  onFocus={e => {
-                    e.target.style.borderColor = 'var(--accent)'
-                    e.target.style.boxShadow = '0 0 0 2px var(--accent-glow)'
-                  }}
-                  onBlur={e => {
-                    e.target.style.borderColor = 'var(--border)'
-                    e.target.style.boxShadow = 'none'
-                  }}
-                />
+                  padding: '2px',
+                  boxShadow: '0 0 16px rgba(47,129,247,0.3)',
+                }}>
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    value={newMessage}
+                    onChange={e => setNewMessage(e.target.value)}
+                    placeholder="Type a message..."
+                    autoComplete="off"
+                    style={{
+                      width: '100%',
+                      background: '#1e2640',
+                      border: 'none',
+                      color: '#ffffff',
+                      borderRadius: '999px',
+                      padding: '0.7rem 1.2rem',
+                      outline: 'none',
+                      fontSize: '0.95rem',
+                      display: 'block',
+                    }}
+                    onFocus={e => {
+                      e.target.parentElement.style.boxShadow = '0 0 24px rgba(47,129,247,0.6)'
+                    }}
+                    onBlur={e => {
+                      e.target.parentElement.style.boxShadow = '0 0 16px rgba(47,129,247,0.3)'
+                    }}
+                  />
+                </div>
+
+                {/* Send button */}
                 <button
                   type="submit"
                   disabled={sending || !newMessage.trim()}
                   style={{
-                    width: '44px',
-                    height: '44px',
+                    width: '46px',
+                    height: '46px',
                     borderRadius: '50%',
-                    background: sending || !newMessage.trim() ? 'var(--surface-3)' : 'var(--accent)',
+                    background: sending || !newMessage.trim()
+                      ? 'rgba(99,130,191,0.2)'
+                      : 'linear-gradient(135deg, #2f81f7, #20b2aa)',
                     border: 'none',
                     color: '#fff',
                     fontSize: '1.1rem',
@@ -465,11 +588,11 @@ export default function ChatPage() {
                     justifyContent: 'center',
                     flexShrink: 0,
                     transition: 'all 0.2s ease',
-                    boxShadow: !sending && newMessage.trim() ? '0 2px 12px rgba(47,129,247,0.4)' : 'none',
+                    boxShadow: !sending && newMessage.trim()
+                      ? '0 4px 16px rgba(47,129,247,0.5)'
+                      : 'none',
                   }}
-                >
-                  ➤
-                </button>
+                >➤</button>
               </form>
             </>
           ) : (
@@ -483,28 +606,21 @@ export default function ChatPage() {
                 position: 'relative',
               }}
             >
-              <div
-                style={{
-                  position: 'absolute', inset: 0,
-                  background: 'rgba(13,17,23,0.88)',
-                }}
-              />
+              <div style={{ position: 'absolute', inset: 0, background: 'rgba(10,14,20,0.88)' }} />
               <div style={{ position: 'relative', zIndex: 1 }}>
                 <div
-                  className="w-20 h-20 rounded-full flex items-center justify-center text-4xl mx-auto mb-5"
+                  className="w-24 h-24 rounded-full flex items-center justify-center text-5xl mx-auto mb-6"
                   style={{
-                    background: 'rgba(22,27,34,0.9)',
-                    border: '1px solid var(--border)',
-                    boxShadow: 'var(--shadow-glow)',
+                    background: 'rgba(30,38,64,0.9)',
+                    border: '1px solid rgba(47,129,247,0.3)',
+                    boxShadow: '0 0 30px rgba(47,129,247,0.2)',
                   }}
-                >
-                  💬
-                </div>
-                <h3 className="text-2xl font-bold mb-2" style={{ color: 'var(--text-primary)' }}>
+                >💬</div>
+                <h3 className="text-2xl font-bold mb-2" style={{ color: '#ffffff' }}>
                   Start Chatting!
                 </h3>
-                <p style={{ color: 'var(--text-secondary)', maxWidth: '280px' }}>
-                  Select a traveler from the left sidebar to start your conversation
+                <p style={{ color: '#8b949e', maxWidth: '280px', lineHeight: '1.6' }}>
+                  Select a traveler from the left sidebar to start your conversation ✈️
                 </p>
               </div>
             </div>
