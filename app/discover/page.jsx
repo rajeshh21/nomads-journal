@@ -495,9 +495,9 @@ export default function DiscoverPage() {
                             👤
                           </div>
                           <div className="flex-1">
-                            <h3 className="font-bold text-base mb-1" style={{ color: 'var(--text-primary)' }}>
-                              {t.name}
-                            </h3>
+                            <h3 className="font-bold text-base mb-1 cursor-pointer hover:underline" style={{ color: 'var(--text-primary)' }} onClick={() => router.push(`/users/${t.id}`)}>
+                           {t.name}
+                           </h3>
                             {t.distance !== null && (
                               <p className="text-sm font-semibold mb-1" style={{ color: '#20b2aa' }}>
                                 📍 {t.distance} km away

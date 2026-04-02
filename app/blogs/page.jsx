@@ -215,7 +215,7 @@ export default function BlogsPage() {
                         <div className="w-10 h-10 rounded-full flex items-center justify-center text-lg flex-shrink-0"
                           style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>👤</div>
                         <div className="flex-1">
-                          <p className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>{blog.authorName}</p>
+                          <p className="font-bold text-sm cursor-pointer hover:underline" style={{ color: 'var(--text-primary)' }} onClick={() => router.push(`/users/${blog.authorId}`)}>{blog.authorName}</p>
                           <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
                             {blog.location && <span style={{ color: '#20b2aa' }}>📍 {blog.location} · </span>}
                             {blog.createdAt?.toDate?.()?.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}

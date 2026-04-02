@@ -245,7 +245,8 @@ export default function Dashboard() {
               { label: 'Chat', icon: '💬', path: '/chat', color: '#8b5cf6', bg: 'rgba(30,26,53,0.8)', border: 'rgba(139,92,246,0.3)', glow: 'rgba(139,92,246,0.25)' },
               { label: 'Blogs', icon: '📝', path: '/blogs', color: '#f59e0b', bg: 'rgba(43,31,10,0.8)', border: 'rgba(245,158,11,0.3)', glow: 'rgba(245,158,11,0.25)' },
               { label: 'Discover', icon: '🧭', path: '/discover', color: '#f43f5e', bg: 'rgba(43,15,26,0.8)', border: 'rgba(244,63,94,0.3)', glow: 'rgba(244,63,94,0.25)' },
-              { label: 'Profile', icon: '👤', path: '/profile', color: '#2f81f7', bg: 'rgba(9,27,54,0.8)', border: 'rgba(47,129,247,0.3)', glow: 'rgba(47,129,247,0.25)' },
+            { label: 'Profile', icon: '👤', path: '/profile', color: '#2f81f7', bg: 'rgba(9,27,54,0.8)', border: 'rgba(47,129,247,0.3)', glow: 'rgba(47,129,247,0.25)' },
+              { label: 'History', icon: '📖', path: `/users/${user?.uid}`, color: '#20b2aa', bg: 'rgba(13,43,43,0.8)', border: 'rgba(32,178,170,0.3)', glow: 'rgba(32,178,170,0.25)' },
             ].map(card => (
               <div
                 key={card.path}
@@ -350,7 +351,7 @@ export default function Dashboard() {
                         style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}
                       >👤</div>
                       <div className="flex-1">
-                        <p className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>
+                        <p className="font-bold text-sm cursor-pointer hover:underline" style={{ color: 'var(--text-primary)' }} onClick={() => router.push(`/users/${blog.authorId}`)}>
                           {blog.authorName}
                         </p>
                         <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
