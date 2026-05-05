@@ -1,5 +1,6 @@
 import { Toaster } from 'react-hot-toast'
 import { AuthProvider } from '@/context/AuthContext'
+import ItineraryBot from '@/components/ItineraryBot'
 import './globals.css'
 
 export const metadata = {
@@ -14,6 +15,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <AuthProvider>
           {children}
           <Toaster position="top-center" />
+          <ItineraryBot />
         </AuthProvider>
       </body>
     </html>
